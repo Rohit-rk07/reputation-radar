@@ -1,0 +1,119 @@
+{
+  "name": "Reputation Radar — Weekly Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "8b6582d6-12cb-40b8-9e60-7880275b197c",
+      "name": "Weekly Monday 9am",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "=17XnHypus1qE6umi2gKwkRKHF-FZkwHUp7X0lhBFYJHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Mentions Log"
+        },
+        "options": {}
+      },
+      "id": "49cbf14a-f5d6-4b0d-8d8b-f1a7a0ad777b",
+      "name": "Read Mentions Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1ce6d583-43e5-4a17-9c0b-04a385892957",
+      "name": "Sync Reads",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        144,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "See attached/source workflow JSON for the full Build Brief code."
+      },
+      "id": "bfe3183e-e722-43d2-b633-7d3139f38460",
+      "name": "Build Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        80
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "fromEmail": "[configured SMTP account]",
+        "toEmail": "[configured recipient]",
+        "subject": "={{$json.subject}}",
+        "emailFormat": "both",
+        "text": "={{ $json.body }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "eac1c47d-b717-440b-819d-24e8a842c253",
+      "name": "Send Weekly Brief Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        512,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "=17XnHypus1qE6umi2gKwkRKHF-FZkwHUp7X0lhBFYJHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Pending Approval"
+        },
+        "options": {}
+      },
+      "id": "09b89968-11b0-412e-a666-1cf7ae887da9",
+      "name": "Read Pending Approval",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        0,
+        208
+      ]
+    }
+  ],
+  "active": true,
+  "meta": {
+    "note": "Public-safe documentation export. Credentials and private connection details removed."
+  }
+}
