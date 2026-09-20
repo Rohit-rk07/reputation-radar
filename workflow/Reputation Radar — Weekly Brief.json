@@ -42,22 +42,17 @@
       "position": [
         0,
         0
-      ]
-    },
-    {
-      "parameters": {},
-      "id": "1ce6d583-43e5-4a17-9c0b-04a385892957",
-      "name": "Sync Reads",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3.2,
-      "position": [
-        144,
-        144
-      ]
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QHAlnKVJO9DrMOZS",
+          "name": "Google Sheets account 2"
+        }
+      }
     },
     {
       "parameters": {
-        "jsCode": "See attached/source workflow JSON for the full Build Brief code."
+        "jsCode": "// Weekly brief: an exception-based digest for a busy reader.\n// Order: banner -> four numbers -> items that need a decision (full detail) -> compact watch list -> one closing line.\n// Sentiment (positive / neutral / negative) and risk (ignore / watch / respond_now) are two separate labels.\n// Old rows (verified / unconfirmed / possible / needs_human_review, Confidence column) are still understood.\nconst sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);\nconst inWindow = (row) => {\n  const raw = row['Date'] || row['date'];\n  if (!raw) return false;\n  const d = new Date(raw);\n  return !isNaN(d.getTime()) && d >= sevenDaysAgo;\n};\nconst get = (row, key) => String(row[key] || row[key.replace(/ /g, '')] || '');\nconst uniq = (rows) => [...new Map(rows.map(r => [get(r, 'Source URL'), r])).values()];\nconst plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');\nconst esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/'/g, '&#39;');\nconst cut = (s, n) => { const t = String(s || ''); return t.length > n ? t.slice(0, n - 1) + '\\u2026' : t; };\nconst safeUrl = (u) => { const x = String(u || ''); const l = x.toLowerCase(); return (l.startsWith('http://') || l.startsWith('https://')) ? x : '#'; };\n\nconst logRows = $('Read Mentions Log').all().map(r => r.json).filter(inWindow);\nconst pendingRows = $('Read Pending Approval').all().map(r => r.json).filter(inWindow);\n\nconst status = (r) => get(r, 'Status').toLowerCase();\nconst sentiment = (r) => get(r, 'Sentiment').toLowerCase();\nconst risk = (r) => { const v = get(r, 'Risk').toLowerCase(); return v === 'needs_human_review' ? 'watch' : v; };\nconst rank = { respond_now: 0, watch: 1, ignore: 2 };\nconst byRisk = (a, b) => (rank[risk(a)] !== undefined ? rank[risk(a)] : 3) - (rank[risk(b)] !== undefined ? rank[risk(b)] : 3);\nconst score = (r) => { const n = parseFloat(get(r, 'Match Score') || get(r, 'Confidence')); return Number.isFinite(n) ? n.toFixed(2) : ''; };\n\nconst failed = logRows.filter(r => status(r) === 'failed' || get(r, 'Risk').toLowerCase() === 'error');\nconst discarded = uniq(logRows.filter(r => status(r) === 'discarded'));\nconst kept = uniq(logRows.filter(r => status(r).startsWith('logged')));\nconst review = kept.filter(r => status(r).includes('needs your review') || status(r).includes('unconfirmed') || status(r).includes('possible')).sort(byRisk);\nconst mentions = kept.filter(r => !review.includes(r)).sort(byRisk);\nconst drafts = uniq(pendingRows.filter(r => status(r) === 'pending_approval'));\nconst draftLinks = new Set(drafts.map(r => get(r, 'Source URL')));\n\nconst urgentNoDraft = mentions.filter(r => risk(r) === 'respond_now' && !draftLinks.has(get(r, 'Source URL')));\nconst urgentReview = review.filter(r => risk(r) === 'respond_now');\nconst glance = mentions.filter(r => risk(r) === 'watch');\nconst rest = mentions.filter(r => risk(r) !== 'watch' && risk(r) !== 'respond_now');\nconst negative = kept.filter(r => sentiment(r) === 'negative').length;\n\nconst dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });\n\n// ---------- Verdict ----------\nconst alerts = [];\nif (drafts.length) alerts.push(plural(drafts.length, 'draft') + ' waiting for your approval');\nif (urgentNoDraft.length) alerts.push(plural(urgentNoDraft.length, 'urgent mention') + ' with no draft');\nif (urgentReview.length) alerts.push(plural(urgentReview.length, 'urgent mention') + ' to review');\nlet headline, bannerColor;\nif (alerts.length) { headline = alerts.join(' \\u00b7 '); bannerColor = '#B91C1C'; }\nelse if (glance.length + review.length > 0) { headline = plural(glance.length + review.length, 'mention') + ' worth a look, nothing urgent'; bannerColor = '#B45309'; }\nelse if (kept.length === 0) { headline = 'No new mentions this week'; bannerColor = '#4B5563'; }\nelse { headline = 'All clear, nothing needs your attention'; bannerColor = '#15803D'; }\n\nconst closing = [];\nif (rest.length) closing.push(plural(rest.length, 'other mention') + ' needed no action.');\nif (discarded.length) closing.push(plural(discarded.length, 'search result') + ' dismissed as unrelated or harmless.');\nconst closingText = closing.join(' ');\n\n// ---------- Plain-text version ----------\nconst t = [\n  'Reputation Radar \\u2014 Weekly Brief (' + dateStr + ')',\n  '',\n  headline.toUpperCase(),\n  'Total mentions ' + kept.length + ' | Negative ' + negative + ' | Needs your review ' + review.length + ' | Pending approval ' + drafts.length,\n  ''\n];\nif (failed.length) { t.push('WARNING: ' + plural(failed.length, 'search failure') + ' this week, check the Mentions Log.'); t.push(''); }\nif (drafts.length || urgentNoDraft.length) {\n  t.push('NEEDS YOUR APPROVAL');\n  for (const r of drafts) {\n    t.push('- ' + get(r, 'Title'));\n    t.push('  ' + get(r, 'Source URL'));\n    t.push('  [' + (sentiment(r) || 'n/a') + ' | risk: ' + risk(r) + ']');\n    t.push('  Draft: ' + get(r, 'Draft Response'));\n  }\n  for (const r of urgentNoDraft) {\n    t.push('- ' + get(r, 'Title') + ' (urgent, no draft was created)');\n    t.push('  ' + get(r, 'Source URL'));\n    t.push('  [' + (sentiment(r) || 'n/a') + ' | risk: ' + risk(r) + '] ' + get(r, 'Reasoning'));\n  }\n  t.push('');\n}\nif (review.length) {\n  t.push('NEEDS YOUR REVIEW (could not verify these are about Nidhi / Growpido, but a crisis keyword appeared)');\n  for (const r of review) {\n    t.push('- [' + (sentiment(r) || 'n/a') + ' | risk: ' + risk(r) + '] ' + get(r, 'Title') + (score(r) ? ' | match ' + score(r) : ''));\n    t.push('  ' + get(r, 'Source URL'));\n    if (get(r, 'Reasoning')) t.push('  ' + get(r, 'Reasoning'));\n  }\n  t.push('');\n}\nif (glance.length) {\n  t.push('WORTH A GLANCE');\n  for (const r of glance) {\n    t.push('- [' + (sentiment(r) || 'n/a') + '] ' + get(r, 'Title'));\n    t.push('  ' + get(r, 'Source URL'));\n  }\n  t.push('');\n}\nif (closingText) { t.push(closingText); t.push(''); }\nt.push('Nothing was posted automatically. Drafts are held until you approve them.');\nt.push('- Reputation Radar (Growpido)');\n\n// ---------- HTML version ----------\nconst chip = (label, fg, bg) => `<span style='display:inline-block;padding:2px 8px;margin-right:4px;border-radius:10px;font-size:11px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;background:${bg};color:${fg};'>${esc(label)}</span>`;\nconst RISK = { respond_now: ['#B91C1C', '#FEE2E2'], watch: ['#B45309', '#FEF3C7'], ignore: ['#166534', '#DCFCE7'] };\nconst SENT = { negative: ['#B91C1C', '#FEE2E2'], neutral: ['#4B5563', '#F3F4F6'], positive: ['#166534', '#DCFCE7'] };\nconst riskChip = (r) => { const c = RISK[risk(r)] || ['#4B5563', '#F3F4F6']; return chip(risk(r).replace('_', ' '), c[0], c[1]); };\nconst sentChip = (r) => { const s = sentiment(r); if (!s) return ''; const c = SENT[s] || ['#4B5563', '#F3F4F6']; return chip(s, c[0], c[1]); };\nconst F = 'font-family:Arial,Helvetica,sans-serif;';\nconst link = (r) => `<a href='${esc(safeUrl(get(r, 'Source URL')))}' style='font-size:14px;font-weight:700;color:#111827;text-decoration:none;'>${esc(get(r, 'Title') || get(r, 'Source URL'))}</a>`;\n\nconst header = (title, sub) => `<tr><td style='padding:20px 20px 6px 20px;${F}'><div style='font-size:13px;font-weight:700;color:#111827;text-transform:uppercase;letter-spacing:.04em;'>${esc(title)}</div><div style='font-size:12px;color:#6B7280;margin-top:2px;'>${esc(sub)}</div></td></tr>`;\n\nconst detailRow = (r, o) => `<tr><td style='padding:12px 20px;border-bottom:1px solid #E5E7EB;${F}${o.bg ? 'background:' + o.bg + ';' : ''}'><div style='margin-bottom:5px;'>${riskChip(r)}${sentChip(r)}${o.score && score(r) ? chip('match ' + score(r), '#4B5563', '#F3F4F6') : ''}${o.tag ? chip(o.tag, '#B91C1C', '#FEE2E2') : ''}</div>${link(r)}${get(r, 'Reasoning') ? `<div style='font-size:13px;color:#6B7280;margin-top:3px;'>${esc(cut(get(r, 'Reasoning'), 220))}</div>` : ''}</td></tr>`;\n\nconst draftRow = (r) => `<tr><td style='padding:14px 20px;border-bottom:1px solid #E5E7EB;background:#FEF2F2;${F}'><div style='margin-bottom:5px;'>${riskChip(r)}${sentChip(r)}</div>${link(r)}<div style='margin-top:8px;padding:10px 12px;background:#ffffff;border:1px solid #E5E7EB;border-radius:6px;font-size:13px;color:#374151;white-space:pre-wrap;'>${esc(get(r, 'Draft Response'))}</div></td></tr>`;\n\nconst glanceRow = (r) => `<tr><td style='padding:9px 20px;border-bottom:1px solid #F3F4F6;${F}'>${sentChip(r)}${link(r)}${get(r, 'Reasoning') ? `<div style='font-size:12px;color:#6B7280;margin-top:2px;'>${esc(cut(get(r, 'Reasoning'), 110))}</div>` : ''}</td></tr>`;\n\nconst stat = (n, label) => `<td align='center' style='padding:12px 4px;${F}'><div style='font-size:22px;font-weight:700;color:#111827;'>${n}</div><div style='font-size:11px;color:#6B7280;text-transform:uppercase;letter-spacing:.03em;'>${esc(label)}</div></td>`;\n\nlet rows = '';\nif (failed.length) rows += `<tr><td style='padding:10px 20px;background:#FFFBEB;border-bottom:1px solid #FDE68A;${F}font-size:13px;color:#92400E;'>Warning: ${esc(plural(failed.length, 'search failure'))} this week, check the Mentions Log.</td></tr>`;\nif (drafts.length || urgentNoDraft.length) {\n  rows += header('Needs your approval', 'Drafts are held. Nothing is sent until you approve it.');\n  rows += drafts.map(draftRow).join('');\n  rows += urgentNoDraft.map(r => detailRow(r, { tag: 'no draft created', bg: '#FEF2F2' })).join('');\n}\nif (review.length) {\n  rows += header('Needs your review', 'Could not verify these are about Nidhi or Growpido, but a crisis keyword appeared. Check if it is really her.');\n  rows += review.map(r => detailRow(r, { score: true })).join('');\n}\nif (glance.length) {\n  rows += header('Worth a glance', 'Content that is unclear or borderline.');\n  rows += glance.map(glanceRow).join('');\n}\nif (closingText) rows += `<tr><td style='padding:16px 20px;${F}font-size:13px;color:#6B7280;'>${esc(closingText)}</td></tr>`;\n\nconst html = `<!DOCTYPE html><html><body style='margin:0;padding:24px 0;background:#F3F4F6;'>\n<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr><td align='center' style='padding:0 8px;'>\n<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:600px;background:#ffffff;border-radius:8px;overflow:hidden;border:1px solid #E5E7EB;'>\n<tr><td style='padding:22px 20px 14px 20px;${F}'><div style='font-size:12px;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;font-weight:700;'>Growpido</div><div style='font-size:20px;font-weight:700;color:#111827;margin-top:2px;'>Reputation Radar</div><div style='font-size:13px;color:#6B7280;'>Weekly Brief &middot; ${esc(dateStr)}</div></td></tr>\n<tr><td style='padding:14px 20px;background:${bannerColor};${F}font-size:15px;font-weight:700;color:#ffffff;'>${esc(headline)}</td></tr>\n<tr><td style='padding:4px 8px;border-bottom:1px solid #E5E7EB;'><table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>${stat(kept.length, 'Total mentions')}${stat(negative, 'Negative')}${stat(review.length, 'Needs your review')}${stat(drafts.length, 'Pending approval')}</tr></table></td></tr>\n${rows}\n<tr><td style='padding:16px 20px;border-top:1px solid #E5E7EB;${F}font-size:12px;color:#9CA3AF;'>Nothing was posted automatically. Drafts are held until you approve them.<br/>Reputation Radar &middot; Growpido</td></tr>\n</table></td></tr></table>\n</body></html>`;\n\nreturn [{\n  subject: (alerts.length ? 'Action needed: ' : '') + 'Reputation Radar \\u2014 Weekly Brief (' + dateStr + ')',\n  body: t.join('\\n'),\n  html\n}];"
       },
       "id": "bfe3183e-e722-43d2-b633-7d3139f38460",
       "name": "Build Brief",
@@ -71,8 +66,8 @@
     },
     {
       "parameters": {
-        "fromEmail": "[configured SMTP account]",
-        "toEmail": "[configured recipient]",
+        "fromEmail": "rohitchaudharyrk.25@gmail.com",
+        "toEmail": "rohitchaudharyrk.25@gmail.com",
         "subject": "={{$json.subject}}",
         "emailFormat": "both",
         "text": "={{ $json.body }}",
@@ -86,14 +81,21 @@
       "position": [
         512,
         80
-      ]
+      ],
+      "webhookId": "ac7d1908-2613-4214-ae98-4524755c9786",
+      "credentials": {
+        "smtp": {
+          "id": "iSUJbUwrISqIlhPu",
+          "name": "SMTP account"
+        }
+      }
     },
     {
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "=17XnHypus1qE6umi2gKwkRKHF-FZkwHUp7X0lhBFYJHA",
-          "mode": "id"
+          "mode": "id",
+          "value": "=17XnHypus1qE6umi2gKwkRKHF-FZkwHUp7X0lhBFYJHA"
         },
         "sheetName": {
           "__rl": true,
@@ -109,11 +111,102 @@
       "position": [
         0,
         208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "QHAlnKVJO9DrMOZS",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "1ce6d583-43e5-4a17-9c0b-04a385892957",
+      "name": "Sync Reads",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        144,
+        144
       ]
     }
   ],
+  "pinData": {},
+  "connections": {
+    "Weekly Monday 9am": {
+      "main": [
+        [
+          {
+            "node": "Read Mentions Log",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read Pending Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Mentions Log": {
+      "main": [
+        [
+          {
+            "node": "Sync Reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Brief": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Brief Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Pending Approval": {
+      "main": [
+        [
+          {
+            "node": "Sync Reads",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Sync Reads": {
+      "main": [
+        [
+          {
+            "node": "Build Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "24186f1f-d400-4645-8052-413d851f6572",
   "meta": {
-    "note": "Public-safe documentation export. Credentials and private connection details removed."
-  }
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "a5bcc265b970adbdeed12c41951765e00e9529ef0ff96464963d74d2fd83f2fa"
+  },
+  "nodeGroups": [],
+  "id": "Edlve9Z9KG7kggM0",
+  "tags": []
 }
