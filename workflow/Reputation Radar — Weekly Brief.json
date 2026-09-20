@@ -25,7 +25,7 @@
       "parameters": {
         "documentId": {
           "__rl": true,
-          "value": "=17XnHypus1qE6umi2gKwkRKHF-FZkwHUp7X0lhBFYJHA",
+          "value": "=[GOOGLE_SHEET_ID]",
           "mode": "id"
         },
         "sheetName": {
@@ -42,13 +42,7 @@
       "position": [
         0,
         0
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "QHAlnKVJO9DrMOZS",
-          "name": "Google Sheets account 2"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -66,8 +60,8 @@
     },
     {
       "parameters": {
-        "fromEmail": "rohitchaudharyrk.25@gmail.com",
-        "toEmail": "rohitchaudharyrk.25@gmail.com",
+        "fromEmail": "[EMAIL]",
+        "toEmail": "[EMAIL]",
         "subject": "={{$json.subject}}",
         "emailFormat": "both",
         "text": "={{ $json.body }}",
@@ -82,20 +76,14 @@
         512,
         80
       ],
-      "webhookId": "ac7d1908-2613-4214-ae98-4524755c9786",
-      "credentials": {
-        "smtp": {
-          "id": "iSUJbUwrISqIlhPu",
-          "name": "SMTP account"
-        }
-      }
+      "webhookId": "ac7d1908-2613-4214-ae98-4524755c9786"
     },
     {
       "parameters": {
         "documentId": {
           "__rl": true,
           "mode": "id",
-          "value": "=17XnHypus1qE6umi2gKwkRKHF-FZkwHUp7X0lhBFYJHA"
+          "value": "=[GOOGLE_SHEET_ID]"
         },
         "sheetName": {
           "__rl": true,
@@ -111,13 +99,7 @@
       "position": [
         0,
         208
-      ],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "QHAlnKVJO9DrMOZS",
-          "name": "Google Sheets account 2"
-        }
-      }
+      ]
     },
     {
       "parameters": {},
@@ -203,8 +185,7 @@
   "versionId": "24186f1f-d400-4645-8052-413d851f6572",
   "meta": {
     "aiBuilderAssisted": true,
-    "builderVariant": "mcp",
-    "instanceId": "a5bcc265b970adbdeed12c41951765e00e9529ef0ff96464963d74d2fd83f2fa"
+    "builderVariant": "mcp"
   },
   "nodeGroups": [],
   "id": "Edlve9Z9KG7kggM0",
